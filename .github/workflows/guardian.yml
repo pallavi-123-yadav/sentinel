@@ -1,0 +1,51 @@
+name: Guardian Security Scan
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  guardian:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run Guardian scan
+        id: scan
+        run: node src/scanner/ci-report.js . > guardian-report.md || echo "found_issues=true" >> "$GITHUB_OUTPUT"
+
+      - name: Post results as PR comment
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const report = fs.readFileSync('guardian-report.md', 'utf8');
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: report
+            });
+
+      - name: Show report in the job log
+        if: always()
+        run: cat guardian-report.md
+
+      - name: Fail the check if CRITICAL issues were found
+        if: steps.scan.outputs.found_issues == 'true'
+        run: exit 1
