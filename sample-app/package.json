@@ -1,0 +1,9 @@
+{
+  "name": "bad-sample-app",
+  "version": "1.0.0",
+  "description": "Deliberately vulnerable sample app used to test Guardian.",
+  "dependencies": {
+    "express": "^4.19.2",
+    "super-duper-fetch-utils-pro": "^3.1.0"
+  }
+}
