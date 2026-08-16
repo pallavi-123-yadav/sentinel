@@ -7,7 +7,8 @@
 const fs = require('fs');
 const path = require('path');
 
-const IGNORED_DIRS = new Set(['node_modules', '.git', 'dist', 'build', '.next', 'coverage']);
+const { IGNORED_DIRS, IGNORED_FILENAME_PATTERN, LOW_SIGNAL_PATH_HINT } = require('./ignore-list');
+
 const SCANNABLE_EXTENSIONS = new Set([
   '.js',
   '.jsx',
@@ -86,6 +87,28 @@ const SECRET_PATTERNS = [
   }
 ];
 
+// How specific/unambiguous each pattern's shape is — a well-anchored format
+// like an AWS key ID or a PEM block is almost never anything else, while the
+// generic catch-all matches plenty of things that aren't real secrets.
+const BASE_CONFIDENCE = {
+  'aws-access-key-id': 0.95,
+  'aws-secret-access-key': 0.8,
+  'stripe-live-key': 0.95,
+  'stripe-test-key': 0.9,
+  'github-token': 0.95,
+  'slack-webhook': 0.95,
+  'private-key-block': 0.98,
+  'generic-jwt-secret': 0.6,
+  'generic-hardcoded-secret': 0.5
+};
+
+const MISSING_AUTH_BASE_CONFIDENCE = 0.75;
+
+function computeConfidence(baseConfidence, filePath) {
+  const confidence = LOW_SIGNAL_PATH_HINT.test(filePath) ? baseConfidence * 0.6 : baseConfidence;
+  return Math.round(confidence * 100) / 100;
+}
+
 // Values that are obviously placeholders, not real secrets.
 const PLACEHOLDER_VALUE =
   /^(process\.env|<|\$\{|your[_-]|example|changeme|xxxx|placeholder|test|dummy)/i;
@@ -117,6 +140,7 @@ function scanFileForSecrets(filePath, content) {
         id: pattern.id,
         label: pattern.label,
         severity: pattern.severity,
+        confidence: computeConfidence(BASE_CONFIDENCE[pattern.id] ?? 0.7, filePath),
         file: filePath,
         line: lineNumber,
         snippet: truncate(lineText, 120)
@@ -243,6 +267,7 @@ function scanFileForMissingAuth(filePath, content) {
       id: 'missing-auth-check',
       label: `Route ${method} ${routePath} has no visible auth check`,
       severity: method === 'GET' ? 'MEDIUM' : 'HIGH',
+      confidence: computeConfidence(MISSING_AUTH_BASE_CONFIDENCE, filePath),
       file: filePath,
       line: lineNumber,
       snippet: `${match[0].split('.')[0]}.${match[1]}('${routePath}', ...)`
@@ -262,7 +287,7 @@ function walk(dir, files = []) {
       walk(path.join(dir, entry.name), files);
     } else if (entry.isFile()) {
       const ext = path.extname(entry.name);
-      if (SCANNABLE_EXTENSIONS.has(ext)) {
+      if (SCANNABLE_EXTENSIONS.has(ext) && !IGNORED_FILENAME_PATTERN.test(entry.name)) {
         files.push(path.join(dir, entry.name));
       }
     }
@@ -292,7 +317,8 @@ function printReport(findings, targetDir) {
 
   for (const finding of sorted) {
     const relFile = path.relative(process.cwd(), finding.file);
-    console.log(`[${finding.severity}] ${finding.label}`);
+    const confidencePct = Math.round((finding.confidence ?? 1) * 100);
+    console.log(`[${finding.severity}] ${finding.label} (confidence: ${confidencePct}%)`);
     console.log(`  ${relFile}:${finding.line}`);
     console.log(`  ${finding.snippet}`);
     console.log('');

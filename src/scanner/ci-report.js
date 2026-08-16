@@ -12,6 +12,11 @@ const { runScan } = require('./secret-scanner');
 const { checkPackages } = require('./package-checker');
 
 const SEVERITY_ORDER = { CRITICAL: 0, HIGH: 1, MEDIUM: 2, LOW: 3 };
+// Findings below this confidence are shown separately as "review manually"
+// rather than in the main list, and can't fail the CI check on their own —
+// regex-based detection is noisy enough that a low-confidence match (test
+// fixtures, demo dirs, the loose generic-secret pattern) shouldn't block a PR.
+const CONFIDENCE_THRESHOLD = 0.5;
 const SEVERITY_EMOJI = {
   CRITICAL: '\u{1F6A8}',
   HIGH: '\u{26A0}\u{FE0F}',
@@ -28,10 +33,13 @@ function formatReport(findings, unverified, targetDir) {
   lines.push('## \u{1F6E1}\u{FE0F} Guardian Security Scan');
   lines.push('');
 
-  if (findings.length === 0) {
+  const confident = findings.filter((f) => (f.confidence ?? 1) >= CONFIDENCE_THRESHOLD);
+  const lowConfidence = findings.filter((f) => (f.confidence ?? 1) < CONFIDENCE_THRESHOLD);
+
+  if (confident.length === 0) {
     lines.push(`No issues found in \`${targetDir}\`.`);
   } else {
-    const sorted = [...findings].sort(
+    const sorted = [...confident].sort(
       (a, b) => SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity]
     );
     const counts = sorted.reduce((acc, f) => {
@@ -57,6 +65,23 @@ function formatReport(findings, unverified, targetDir) {
         lines.push(`  \`\`\``);
       }
     }
+  }
+
+  if (lowConfidence.length > 0) {
+    lines.push('');
+    lines.push(
+      `<details><summary>${lowConfidence.length} low-confidence finding(s) — likely false positives, review manually</summary>`
+    );
+    lines.push('');
+    for (const finding of lowConfidence) {
+      const relFile = path.relative(process.cwd(), finding.file);
+      const location = finding.line ? `${relFile}:${finding.line}` : relFile;
+      const confidencePct = Math.round(finding.confidence * 100);
+      lines.push(
+        `- [${finding.severity}] ${finding.label} — \`${location}\` (confidence ${confidencePct}%)`
+      );
+    }
+    lines.push('</details>');
   }
 
   if (unverified.length > 0) {
@@ -91,8 +116,14 @@ async function main() {
 
   console.log(report);
 
-  const hasCritical = allFindings.some((f) => f.severity === 'CRITICAL');
+  const hasCritical = allFindings.some(
+    (f) => f.severity === 'CRITICAL' && (f.confidence ?? 1) >= CONFIDENCE_THRESHOLD
+  );
   process.exitCode = hasCritical ? 1 : 0;
 }
 
-main();
+if (require.main === module) {
+  main();
+}
+
+module.exports = { formatReport };

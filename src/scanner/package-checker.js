@@ -12,7 +12,8 @@
 const fs = require('fs');
 const path = require('path');
 
-const IGNORED_DIRS = new Set(['node_modules', '.git', 'dist', 'build', '.next', 'coverage']);
+const { IGNORED_DIRS } = require('./ignore-list');
+
 const REGISTRY_TIMEOUT_MS = 6000;
 
 // --- Manifest discovery -------------------------------------------------
