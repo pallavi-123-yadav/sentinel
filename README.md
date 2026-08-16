@@ -81,3 +81,5 @@ Guardian currently catches:
 - Hallucinated npm and PyPI packages in `package.json`/`requirements.txt`
 
 Not yet built: GitHub webhook integration and a dashboard.
+
+<!-- test PR to verify the Guardian GitHub Action posts a comment -->
