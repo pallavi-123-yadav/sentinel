@@ -3,9 +3,13 @@
   "version": "0.1.0",
   "description": "Guardian: a security scanner for AI-generated code. Catches hardcoded secrets and missing auth checks before they ship.",
   "main": "src/scanner/secret-scanner.js",
+  "bin": {
+    "sentinel-scan": "bin/sentinel-scan.js"
+  },
   "scripts": {
     "scan": "node src/scanner/secret-scanner.js",
     "check-packages": "node src/scanner/package-checker.js",
+    "cli": "node bin/sentinel-scan.js",
     "test": "jest",
     "lint": "eslint .",
     "format": "prettier --write ."
@@ -20,6 +24,7 @@
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
+    "commander": "^15.0.0",
     "dotenv": "^17.4.2",
     "express": "^5.2.1"
   },

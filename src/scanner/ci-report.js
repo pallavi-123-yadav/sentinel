@@ -10,13 +10,8 @@
 const path = require('path');
 const { runScan } = require('./secret-scanner');
 const { checkPackages } = require('./package-checker');
+const { buildReportData } = require('./report-data');
 
-const SEVERITY_ORDER = { CRITICAL: 0, HIGH: 1, MEDIUM: 2, LOW: 3 };
-// Findings below this confidence are shown separately as "review manually"
-// rather than in the main list, and can't fail the CI check on their own —
-// regex-based detection is noisy enough that a low-confidence match (test
-// fixtures, demo dirs, the loose generic-secret pattern) shouldn't block a PR.
-const CONFIDENCE_THRESHOLD = 0.5;
 const SEVERITY_EMOJI = {
   CRITICAL: '\u{1F6A8}',
   HIGH: '\u{26A0}\u{FE0F}',
@@ -28,21 +23,17 @@ function codeSafe(text) {
   return String(text).replace(/`/g, "'");
 }
 
-function formatReport(findings, unverified, targetDir) {
+function formatReport(findings, unverified, targetDir, reportOptions = {}) {
   const lines = [];
   lines.push('## \u{1F6E1}\u{FE0F} Guardian Security Scan');
   lines.push('');
 
-  const confident = findings.filter((f) => (f.confidence ?? 1) >= CONFIDENCE_THRESHOLD);
-  const lowConfidence = findings.filter((f) => (f.confidence ?? 1) < CONFIDENCE_THRESHOLD);
+  const { confident, lowConfidence } = buildReportData(findings, unverified, reportOptions);
 
   if (confident.length === 0) {
     lines.push(`No issues found in \`${targetDir}\`.`);
   } else {
-    const sorted = [...confident].sort(
-      (a, b) => SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity]
-    );
-    const counts = sorted.reduce((acc, f) => {
+    const counts = confident.reduce((acc, f) => {
       acc[f.severity] = (acc[f.severity] || 0) + 1;
       return acc;
     }, {});
@@ -50,10 +41,10 @@ function formatReport(findings, unverified, targetDir) {
       .map(([sev, count]) => `${count} ${sev}`)
       .join(', ');
 
-    lines.push(`**${sorted.length} issue(s) found** — ${summary}`);
+    lines.push(`**${confident.length} issue(s) found** — ${summary}`);
     lines.push('');
 
-    for (const finding of sorted) {
+    for (const finding of confident) {
       const emoji = SEVERITY_EMOJI[finding.severity] || '';
       const relFile = path.relative(process.cwd(), finding.file);
       const location = finding.line ? `${relFile}:${finding.line}` : relFile;
@@ -116,9 +107,7 @@ async function main() {
 
   console.log(report);
 
-  const hasCritical = allFindings.some(
-    (f) => f.severity === 'CRITICAL' && (f.confidence ?? 1) >= CONFIDENCE_THRESHOLD
-  );
+  const { hasCritical } = buildReportData(allFindings, unverified);
   process.exitCode = hasCritical ? 1 : 0;
 }
 
