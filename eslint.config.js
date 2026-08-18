@@ -19,6 +19,9 @@ module.exports = [
     }
   },
   {
-    ignores: ['node_modules/', 'coverage/']
+    // The dashboard is a separate Next.js subproject with its own
+    // package.json, ESLint config (eslint-config-next), and build output —
+    // it lints and formats itself, not through the root config.
+    ignores: ['node_modules/', 'coverage/', 'dashboard/']
   }
 ];

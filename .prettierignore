@@ -1,0 +1,5 @@
+node_modules/
+coverage/
+
+# The dashboard is a separate Next.js subproject that formats itself.
+dashboard/
