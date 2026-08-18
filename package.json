@@ -10,6 +10,7 @@
     "scan": "node src/scanner/secret-scanner.js",
     "check-packages": "node src/scanner/package-checker.js",
     "cli": "node bin/sentinel-scan.js",
+    "webhook": "node src/webhook/server.js",
     "test": "jest",
     "lint": "eslint .",
     "format": "prettier --write ."
